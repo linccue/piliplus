@@ -519,7 +519,7 @@ class _AudioPageState extends State<AudioPage> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: PlayRepeat.values
-                        .take(4)
+                        .take(5) // <--- 修改点：将 4 改成 5，显示全部 5 个选项
                         .map(
                           (e) => _playModeWidget(
                             colorScheme: colorScheme,
@@ -1025,6 +1025,6 @@ extension _PlayReatExt on PlayRepeat {
     PlayRepeat.singleCycle => Icons.play_circle_outline_rounded,
     PlayRepeat.listCycle => Icons.sync_rounded,
     PlayRepeat.autoPlayRelated => throw UnimplementedError(),
-    PlayRepeat.custom => Icons.pause_rounded, // <--- 新增这一行
+    PlayRepeat.custom => Icons.pause_rounded,
   };
 }

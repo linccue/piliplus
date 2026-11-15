@@ -30,9 +30,13 @@ class _DynamicsPageState extends CommonPageState<DynamicsPage>
   UpPanelPosition get upPanelPosition => _dynamicsController.upPanelPosition;
   late final MainController _mainController = Get.find<MainController>();
 
+  // 顶栏是否隐藏的状态
   bool _hideAppBar = false;
-  // 新增：用于记录向上滑动的距离，防止微小滑动就唤醒顶栏
-  double _scrollUpDistance = 0.0;
+  // 累积滑动距离
+  double _scrollAccumulator = 0.0;
+
+  // 扳机距离：下拉/上推多少像素后触发动画
+  static const double _triggerDistance = 150.0;
 
   @override
   bool get wantKeepAlive => true;
@@ -199,30 +203,35 @@ class _DynamicsPageState extends CommonPageState<DynamicsPage>
       body: NotificationListener<ScrollNotification>(
         onNotification: (notification) {
           if (checkPage) return false;
-          
+
           if (notification is ScrollUpdateNotification) {
             final delta = notification.scrollDelta ?? 0;
-            
+
             if (_hideAppBar) {
-              // 如果当前是隐藏状态
-              if (delta < 0) {
-                // 向上滑动（看历史），累积滑动距离
-                _scrollUpDistance += -delta;
-                // 只有当累积向上的滑动超过 60 像素时，才显示顶栏
-                if (_scrollUpDistance > 60.0) {
+              // 当前是隐藏状态，用户往下滑（看历史，delta > 0），累积距离
+              if (delta > 0) {
+                _scrollAccumulator += delta;
+                // 累积超过 150 像素，触发显示动画
+                if (_scrollAccumulator > _triggerDistance) {
                   setState(() => _hideAppBar = false);
-                  _scrollUpDistance = 0.0;
+                  _scrollAccumulator = 0.0;
                 }
-              } else if (delta > 0) {
-                // 如果中途又向下滑了，重置累积距离
-                _scrollUpDistance = 0.0;
+              } else {
+                // 如果中途向上滑了，说明用户不想看历史，重置累积
+                _scrollAccumulator = 0.0;
               }
             } else {
-              // 如果当前是显示状态
-              if (delta > 0 && notification.metrics.pixels > 0) {
-                // 只要向下滑动（看新内容）且不在最顶部，立刻隐藏
-                setState(() => _hideAppBar = true);
-                _scrollUpDistance = 0.0;
+              // 当前是显示状态，用户往上滑（看新内容，delta < 0），累积距离
+              if (delta < 0) {
+                _scrollAccumulator += -delta;
+                // 累积超过 150 像素，触发隐藏动画
+                if (_scrollAccumulator > _triggerDistance) {
+                  setState(() => _hideAppBar = true);
+                  _scrollAccumulator = 0.0;
+                }
+              } else {
+                // 如果中途向下滑了，重置累积
+                _scrollAccumulator = 0.0;
               }
             }
           }
@@ -230,13 +239,14 @@ class _DynamicsPageState extends CommonPageState<DynamicsPage>
         },
         child: Column(
           children: [
+            // 使用 AnimatedContainer 来实现“平滑出现/平滑隐藏”的动画
             AnimatedContainer(
               duration: const Duration(milliseconds: 300),
               curve: Curves.easeInOutCubic,
               height: _hideAppBar ? 0 : 50,
               child: ClipRect(
                 child: AnimatedOpacity(
-                  duration: const Duration(milliseconds: 250),
+                  duration: const Duration(milliseconds: 300),
                   opacity: _hideAppBar ? 0.0 : 1.0,
                   child: OverflowBox(
                     minHeight: 50,

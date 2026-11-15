@@ -30,12 +30,8 @@ class _DynamicsPageState extends CommonPageState<DynamicsPage>
   UpPanelPosition get upPanelPosition => _dynamicsController.upPanelPosition;
   late final MainController _mainController = Get.find<MainController>();
 
-  // 顶栏是否隐藏的状态
   bool _hideAppBar = false;
-  // 累积滑动距离
   double _scrollAccumulator = 0.0;
-
-  // 扳机距离：下拉/上推多少像素后触发动画
   static const double _triggerDistance = 150.0;
 
   @override
@@ -207,30 +203,29 @@ class _DynamicsPageState extends CommonPageState<DynamicsPage>
           if (notification is ScrollUpdateNotification) {
             final delta = notification.scrollDelta ?? 0;
 
+            // === 修正后的逻辑 ===
             if (_hideAppBar) {
-              // 当前是隐藏状态，用户往下滑（看历史，delta > 0），累积距离
-              if (delta > 0) {
-                _scrollAccumulator += delta;
-                // 累积超过 150 像素，触发显示动画
+              // 1. 当前是隐藏状态，需要【下滑】（看历史）来显示
+              // 在 Flutter 中，下滑列表是 delta < 0
+              if (delta < 0) {
+                _scrollAccumulator += -delta; // 累积正距离
                 if (_scrollAccumulator > _triggerDistance) {
                   setState(() => _hideAppBar = false);
                   _scrollAccumulator = 0.0;
                 }
               } else {
-                // 如果中途向上滑了，说明用户不想看历史，重置累积
                 _scrollAccumulator = 0.0;
               }
             } else {
-              // 当前是显示状态，用户往上滑（看新内容，delta < 0），累积距离
-              if (delta < 0) {
-                _scrollAccumulator += -delta;
-                // 累积超过 150 像素，触发隐藏动画
+              // 2. 当前是显示状态，需要【上滑】（看新内容）来隐藏
+              // 在 Flutter 中，上滑列表是 delta > 0
+              if (delta > 0 && notification.metrics.pixels > 0) {
+                _scrollAccumulator += delta; // 累积正距离
                 if (_scrollAccumulator > _triggerDistance) {
                   setState(() => _hideAppBar = true);
                   _scrollAccumulator = 0.0;
                 }
               } else {
-                // 如果中途向下滑了，重置累积
                 _scrollAccumulator = 0.0;
               }
             }
@@ -239,7 +234,7 @@ class _DynamicsPageState extends CommonPageState<DynamicsPage>
         },
         child: Column(
           children: [
-            // 使用 AnimatedContainer 来实现“平滑出现/平滑隐藏”的动画
+            // ===== 平滑动画效果 =====
             AnimatedContainer(
               duration: const Duration(milliseconds: 300),
               curve: Curves.easeInOutCubic,

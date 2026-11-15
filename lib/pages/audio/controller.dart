@@ -194,6 +194,14 @@ class AudioController extends GetxController
       } catch (_) {}
     }
 
+    // ===== 新增：如果是稍后再看，自动开启 60 分钟定时关闭 =====
+    if (from.name.toUpperCase().contains('WATCH') || 
+        _videoDetailController?.sourceType == SourceType.watchLater) {
+      if (!shutdownTimerService.isActive) {
+        shutdownTimerService.startTimer(const Duration(minutes: 60));
+      }
+    }
+
     _queryPlayList(isInit: true);
 
     final String? audioUrl = args['audioUrl'];
@@ -484,7 +492,7 @@ class AudioController extends GetxController
           if (shutdownTimerService.isWaiting) {
             shutdownTimerService.handleWaiting();
           } else {
-            switch (actualPlayMode) { // <--- 替换这里
+            switch (actualPlayMode) {
               case PlayRepeat.pause:
               case PlayRepeat.custom:
                 break;

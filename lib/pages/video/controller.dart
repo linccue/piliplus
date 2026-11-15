@@ -50,9 +50,10 @@ import 'package:PiliPlus/pages/video/widgets/header_control.dart';
 import 'package:PiliPlus/plugin/pl_player/controller.dart';
 import 'package:PiliPlus/plugin/pl_player/models/data_source.dart';
 import 'package:PiliPlus/plugin/pl_player/models/heart_beat_type.dart';
-import 'package:PiliPlus/plugin/pl_player/models/play_repeat.dart'; // <--- 新增导入
+import 'package:PiliPlus/plugin/pl_player/models/play_repeat.dart';
 import 'package:PiliPlus/plugin/pl_player/models/play_status.dart';
 import 'package:PiliPlus/services/download/download_service.dart';
+import 'package:PiliPlus/services/shutdown_timer_service.dart' show shutdownTimerService; // <--- 新增导入
 import 'package:PiliPlus/utils/accounts.dart';
 import 'package:PiliPlus/utils/connectivity_utils.dart';
 import 'package:PiliPlus/utils/extension/nested_scroll_ext.dart';
@@ -437,6 +438,11 @@ class VideoDetailController extends GetxController
           ? 1
           : 0,
     );
+
+    // ===== 新增：如果是从“稍后再看”进入，自动开启 60 分钟定时关闭 =====
+    if (sourceType == SourceType.watchLater) {
+      shutdownTimerService.startTimer(const Duration(minutes: 60));
+    }
 
     // ===== 尝试自动加载上次记忆的本地字幕 =====
     _autoLoadLocalSubtitle();

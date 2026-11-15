@@ -648,8 +648,10 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
           child: Stack(
             clipBehavior: .none,
             children: [
-              Align(
-                alignment: .centerLeft,
+              Positioned(
+                left: 0,
+                top: 0,
+                bottom: 0,
                 child: Row(
                   mainAxisSize: .min,
                   children: [
@@ -684,28 +686,27 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
                 ),
               ),
               Center(child: playBtn),
-              Align(
-                alignment: Alignment.centerRight,
+              Positioned(
+                right: 0,
+                top: 0,
+                bottom: 0,
                 child: videoDetailController.playedTime == null
                     ? _moreBtn(colorScheme.onSurface)
-                    : Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: SizedBox(
-                          width: 50,
-                          height: 50,
-                          child: GestureDetector(
-                            behavior: HitTestBehavior.opaque,
-                            onTap: () {
-                              (videoDetailController.headerCtrKey.currentState
-                                      as HeaderControlState?)
-                                  ?.showSettingSheet();
-                            },
-                            child: Center(
-                              child: Icon(
-                                Icons.more_vert_outlined,
-                                size: 22,
-                                color: colorScheme.onSurface,
-                              ),
+                    : Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: () {
+                            (videoDetailController.headerCtrKey.currentState
+                                    as HeaderControlState?)
+                                ?.showSettingSheet();
+                          },
+                          child: Container(
+                            width: 48,
+                            alignment: Alignment.center,
+                            child: Icon(
+                              Icons.more_vert_outlined,
+                              size: 22,
+                              color: colorScheme.onSurface,
                             ),
                           ),
                         ),
@@ -752,7 +753,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
                 plPlayerController!.onDoubleTapCenter();
               }
             },
-            behavior: HitTestBehavior.translucent, // <--- 改为 translucent 避免拦截子组件手势
+            behavior: HitTestBehavior.translucent,
             child: _buildOverlayToolBar(scrollRatio),
           ),
         );
@@ -1161,16 +1162,16 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
 
   Widget _moreBtn(Color color, {List<Shadow>? shadows}) => PopupMenuButton(
     padding: EdgeInsets.zero,
-    icon: SizedBox(
+    iconSize: 0,
+    icon: Container(
       width: 50,
       height: 50,
-      child: Center(
-        child: Icon(
-          size: 22,
-          Icons.more_vert,
-          color: color,
-          shadows: shadows,
-        ),
+      alignment: Alignment.center,
+      child: Icon(
+        size: 22,
+        Icons.more_vert,
+        color: color,
+        shadows: shadows,
       ),
     ),
     itemBuilder: (BuildContext context) => <PopupMenuEntry>[

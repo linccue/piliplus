@@ -31,6 +31,8 @@ class _DynamicsPageState extends CommonPageState<DynamicsPage>
   late final MainController _mainController = Get.find<MainController>();
 
   bool _hideAppBar = false;
+  // 新增：用于记录向上滑动的距离，防止微小滑动就唤醒顶栏
+  double _scrollUpDistance = 0.0;
 
   @override
   bool get wantKeepAlive => true;
@@ -194,17 +196,34 @@ class _DynamicsPageState extends CommonPageState<DynamicsPage>
       backgroundColor: Colors.transparent,
       drawer: drawer,
       endDrawer: endDrawer,
-      // 把 NotificationListener 包在最外层 body 上，恢复滑动监听
       body: NotificationListener<ScrollNotification>(
         onNotification: (notification) {
           if (checkPage) return false;
-          // 监听滚动，改变 _hideAppBar 状态
+          
           if (notification is ScrollUpdateNotification) {
             final delta = notification.scrollDelta ?? 0;
-            if (delta > 0 && !_hideAppBar && notification.metrics.pixels > 0) {
-              setState(() => _hideAppBar = true);
-            } else if (delta < 0 && _hideAppBar) {
-              setState(() => _hideAppBar = false);
+            
+            if (_hideAppBar) {
+              // 如果当前是隐藏状态
+              if (delta < 0) {
+                // 向上滑动（看历史），累积滑动距离
+                _scrollUpDistance += -delta;
+                // 只有当累积向上的滑动超过 60 像素时，才显示顶栏
+                if (_scrollUpDistance > 60.0) {
+                  setState(() => _hideAppBar = false);
+                  _scrollUpDistance = 0.0;
+                }
+              } else if (delta > 0) {
+                // 如果中途又向下滑了，重置累积距离
+                _scrollUpDistance = 0.0;
+              }
+            } else {
+              // 如果当前是显示状态
+              if (delta > 0 && notification.metrics.pixels > 0) {
+                // 只要向下滑动（看新内容）且不在最顶部，立刻隐藏
+                setState(() => _hideAppBar = true);
+                _scrollUpDistance = 0.0;
+              }
             }
           }
           return false;
@@ -214,7 +233,6 @@ class _DynamicsPageState extends CommonPageState<DynamicsPage>
             AnimatedContainer(
               duration: const Duration(milliseconds: 300),
               curve: Curves.easeInOutCubic,
-              // 去除多余的 topPadding 计算，直接设为 50，因为外层已经处理了安全区
               height: _hideAppBar ? 0 : 50,
               child: ClipRect(
                 child: AnimatedOpacity(

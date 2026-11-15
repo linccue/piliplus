@@ -263,7 +263,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
       if (shutdownTimerService.isWaiting) {
         shutdownTimerService.handleWaiting();
       } else {
-                // 使用我们在 VideoDetailController 里写好的自定义判断逻辑
+        // 使用我们在 VideoDetailController 里写好的自定义判断逻辑
         switch (videoDetailController.effectivePlayRepeat) {
           case PlayRepeat.singleCycle:
             exitFlag = false;
@@ -684,24 +684,29 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
                 ),
               ),
               Center(child: playBtn),
-                           Align(
-                alignment: .centerRight,
+              Align(
+                alignment: Alignment.centerRight,
                 child: videoDetailController.playedTime == null
                     ? _moreBtn(colorScheme.onSurface)
-                    : SizedBox(
-                        width: 60,   // <--- 扩大宽度，增大点击范围
-                        height: 50,  // <--- 扩大高度，增大点击范围
-                        child: IconButton(
-                          tooltip: "更多设置",
-                          // 移除了 padding: zero，使用默认的居中点击热区
-                          onPressed: () =>
+                    : Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: SizedBox(
+                          width: 50,
+                          height: 50,
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: () {
                               (videoDetailController.headerCtrKey.currentState
                                       as HeaderControlState?)
-                                  ?.showSettingSheet(),
-                          icon: Icon(
-                            Icons.more_vert_outlined,
-                            size: 22, // <--- 稍微放大图标
-                            color: colorScheme.onSurface,
+                                  ?.showSettingSheet();
+                            },
+                            child: Center(
+                              child: Icon(
+                                Icons.more_vert_outlined,
+                                size: 22,
+                                color: colorScheme.onSurface,
+                              ),
+                            ),
                           ),
                         ),
                       ),
@@ -747,7 +752,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
                 plPlayerController!.onDoubleTapCenter();
               }
             },
-            behavior: .opaque,
+            behavior: HitTestBehavior.translucent, // <--- 改为 translucent 避免拦截子组件手势
             child: _buildOverlayToolBar(scrollRatio),
           ),
         );
@@ -1155,11 +1160,18 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
   });
 
   Widget _moreBtn(Color color, {List<Shadow>? shadows}) => PopupMenuButton(
-    icon: Icon(
-      size: 22,
-      Icons.more_vert,
-      color: color,
-      shadows: shadows,
+    padding: EdgeInsets.zero,
+    icon: SizedBox(
+      width: 50,
+      height: 50,
+      child: Center(
+        child: Icon(
+          size: 22,
+          Icons.more_vert,
+          color: color,
+          shadows: shadows,
+        ),
+      ),
     ),
     itemBuilder: (BuildContext context) => <PopupMenuEntry>[
       PopupMenuItem(

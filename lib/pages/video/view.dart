@@ -684,25 +684,23 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
                 ),
               ),
               Center(child: playBtn),
-              Align(
+                           Align(
                 alignment: .centerRight,
                 child: videoDetailController.playedTime == null
                     ? _moreBtn(colorScheme.onSurface)
                     : SizedBox(
-                        width: 42,
-                        height: 34,
+                        width: 60,   // <--- 扩大宽度，增大点击范围
+                        height: 50,  // <--- 扩大高度，增大点击范围
                         child: IconButton(
                           tooltip: "更多设置",
-                          style: const ButtonStyle(
-                            padding: WidgetStatePropertyAll(EdgeInsets.zero),
-                          ),
+                          // 移除了 padding: zero，使用默认的居中点击热区
                           onPressed: () =>
                               (videoDetailController.headerCtrKey.currentState
                                       as HeaderControlState?)
                                   ?.showSettingSheet(),
                           icon: Icon(
                             Icons.more_vert_outlined,
-                            size: 19,
+                            size: 22, // <--- 稍微放大图标
                             color: colorScheme.onSurface,
                           ),
                         ),

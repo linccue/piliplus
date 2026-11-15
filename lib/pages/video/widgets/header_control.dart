@@ -287,20 +287,6 @@ class HeaderControl extends StatefulWidget {
         withContent: ReportOptions.liveDanmakuReportCheck,
         contentRequired: ReportOptions.liveDanmakuReportCheck,
         (reasonType, reasonDesc, banUid) {
-          // if (banUid) {
-          //   final filter = ctr.filters;
-          //   if (filter.dmUid.add(extra.mid)) {
-          //     filter.count++;
-          //     GStorage.localCache.put(
-          //       LocalCacheKey.danmakuFilterRules,
-          //       filter,
-          //     );
-          //   }
-          //   DanmakuFilterHttp.danmakuFilterAdd(
-          //     filter: extra.mid,
-          //     type: 2,
-          //   );
-          // }
           return LiveHttp.liveDmReport(
             roomId: roomId,
             mid: extra.mid,
@@ -1574,7 +1560,6 @@ class HeaderControlState extends State<HeaderControl>
                           style: const TextStyle(
                             fontSize: 10.5,
                             letterSpacing: 0,
-                            // fontWeight: FontWeight.bold,
                           ),
                         ),
                       ),
@@ -1903,16 +1888,16 @@ class HeaderControlState extends State<HeaderControl>
                       ),
                     ),
                   ),
-                SizedBox(
-                  width: btnWidth,
-                  height: btnHeight,
-                  child: IconButton(
-                    tooltip: "更多设置",
-                    style: btnStyle,
-                    onPressed: showSettingSheet,
-                    icon: const Icon(
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: showSettingSheet,
+                  child: Container(
+                    width: 44, // 较宽的点击区域
+                    height: btnHeight,
+                    alignment: Alignment.center,
+                    child: const Icon(
                       Icons.more_vert_outlined,
-                      size: 19,
+                      size: 20,
                       color: Colors.white,
                     ),
                   ),

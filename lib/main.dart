@@ -112,6 +112,8 @@ void main() async {
   Get
     ..lazyPut(AccountService.new)
     ..lazyPut(DownloadService.new);
+    
+  // 全局忽略证书错误
   HttpOverrides.global = _CustomHttpOverrides();
 
   if (PlatformUtils.isMobile) {
@@ -411,12 +413,11 @@ class _CustomHttpOverrides extends HttpOverrides {
   @override
   HttpClient createHttpClient(SecurityContext? context) {
     final client = super.createHttpClient(context);
-    // ..maxConnectionsPerHost = 32
-    /// The default value is 15 seconds.
-    //   ..idleTimeout = const Duration(seconds: 15);
-    if (kDebugMode || Pref.badCertificateCallback) {
-      client.badCertificateCallback = (cert, host, port) => true;
-    }
+    
+    // 👇 核心修改：删除了 if (kDebugMode || Pref.badCertificateCallback) 判断，
+    // 强制所有环境（包括 Release 正式版）都忽略证书错误。
+    client.badCertificateCallback = (cert, host, port) => true;
+    
     return client;
   }
 }

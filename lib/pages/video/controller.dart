@@ -441,9 +441,9 @@ class VideoDetailController extends GetxController
 
     // ===== 新增：如果是从“稍后再看”进入，自动开启 60 分钟定时关闭 =====
     if (sourceType == SourceType.watchLater) {
-      shutdownTimerService.startTimer(const Duration(minutes: 60));
+      // 源码里接收的是 int 分钟数，直接传 60 即可
+      shutdownTimerService.startTimer(60); 
     }
-
     // ===== 尝试自动加载上次记忆的本地字幕 =====
     _autoLoadLocalSubtitle();
   }

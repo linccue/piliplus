@@ -70,6 +70,13 @@ Widget videoSeasonWidget(
                     _ => PBadgeType.primary,
                   },
                 ),
+              // 👇 新增：充电/赞助标签，放在封面右上角
+              // 如果右上角已有 PBadge，则下移一行，避免重叠
+              SponsorBadge(
+                bvid: item.modules.moduleDynamic?.major?.archive?.bvid,
+                top: video.badge?.text != null ? 30.0 : 8.0,
+                right: 8.0,
+              ),
               Positioned(
                 left: 0,
                 right: 0,

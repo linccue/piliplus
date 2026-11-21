@@ -58,24 +58,33 @@ Widget videoSeasonWidget(
                   quality: 40,
                 ),
               ),
-              if (video.badge?.text case final badge?)
-                PBadge(
-                  text: badge,
-                  top: 8.0,
-                  right: 10.0,
-                  bottom: null,
-                  left: null,
-                  type: switch (badge) {
-                    '充电专属' => PBadgeType.error,
-                    _ => PBadgeType.primary,
-                  },
-                ),
-              // 👇 新增：充电/赞助标签，放在封面右上角
-              // 如果右上角已有 PBadge，则下移一行，避免重叠
-              SponsorBadge(
-                bvid: item.modules.moduleDynamic?.major?.archive?.bvid,
-                top: video.badge?.text != null ? 30.0 : 8.0,
+              // 👇 右上角标签：合集等 PBadge 在上，空降助手标签紧随其下
+              Positioned(
+                top: 8.0,
                 right: 8.0,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  spacing: 4,
+                  children: [
+                    if (video.badge?.text case final badge?)
+                      PBadge(
+                        text: badge,
+                        isStack: false,
+                        type: switch (badge) {
+                          '充电专属' => PBadgeType.error,
+                          _ => PBadgeType.primary,
+                        },
+                      ),
+                    SponsorBadge(
+                      bvid: switch (item.type) {
+                        'DYNAMIC_TYPE_AV' ||
+                        'DYNAMIC_TYPE_UGC_SEASON' => video.bvid,
+                        _ => null,
+                      },
+                      isStack: false,
+                    ),
+                  ],
+                ),
               ),
               Positioned(
                 left: 0,

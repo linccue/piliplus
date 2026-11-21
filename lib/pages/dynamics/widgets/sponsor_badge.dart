@@ -8,12 +8,14 @@ final Map<String, String?> _sponsorCache = {};
 
 class SponsorBadge extends StatefulWidget {
   final String? bvid;
+  final bool isStack;
   final double? top;
   final double? right;
 
   const SponsorBadge({
     super.key,
     required this.bvid,
+    this.isStack = true,
     this.top = 8,
     this.right = 8,
   });
@@ -88,24 +90,30 @@ class _SponsorBadgeState extends State<SponsorBadge> {
       return const SizedBox.shrink(); // 没有标签就不显示
     }
 
+    final content = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.6),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        _tagText!,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+
+    if (!widget.isStack) {
+      return content;
+    }
+
     return Positioned(
       top: widget.top,
       right: widget.right,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-        decoration: BoxDecoration(
-          color: Colors.black.withValues(alpha: 0.6),
-          borderRadius: BorderRadius.circular(4),
-        ),
-        child: Text(
-          _tagText!,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 10,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ),
+      child: content,
     );
   }
 }

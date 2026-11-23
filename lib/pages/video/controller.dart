@@ -1326,24 +1326,32 @@ class VideoDetailController extends GetxController
       }
 
       if (response.subtitle?.subtitles case final sub? when (sub.isNotEmpty)) {
-        _setSubtitle(sub);
-      } else if (!Accounts.main.isLogin) {
-        final res = await DmGrpc.dmView(aid, cid.value);
-        if (res case Success(:final response)) {
-          if (DmGrpc.dmViewToSubtitle(response) case final sub?
-              when (sub.isNotEmpty)) {
-            _setSubtitle(sub);
-          }
-        } else {
-          res.toast();
-        }
+        await _setSubtitle(sub);
+      } else {
+        // 播放接口没给字幕时，用弹幕视图接口兜底：B 站自动生成的 AI 字幕在这里
+        await _fallbackDmViewSubtitle();
       }
     }
   }
 
+  Future<void> _fallbackDmViewSubtitle() async {
+    try {
+      final res = await DmGrpc.dmView(aid, cid.value);
+      if (isClosed) return;
+      if (res case Success(:final response)) {
+        final sub = DmGrpc.dmViewToSubtitle(response);
+        if (sub != null && sub.isNotEmpty) {
+          await _setSubtitle(sub);
+        }
+      } else if (!Accounts.main.isLogin) {
+        res.toast();
+      }
+    } catch (_) {}
+  }
+
   Future<void> _setSubtitle(List<Subtitle> sub) async {
     subtitles.value = sub;
-    final idx = switch (Pref.subtitlePreferenceV2) {
+    var idx = switch (Pref.subtitlePreferenceV2) {
       .off => 0,
       .on => 1,
       .withoutAi => sub.first.lan.startsWith('ai') ? 0 : 1,
@@ -1354,6 +1362,11 @@ class VideoDetailController extends GetxController
             ? 1
             : 0,
     };
+    // 开了字幕翻译但偏好是「不显示字幕」：自动挑一条能翻的外语字幕
+    if (idx == 0 && Pref.subtitleTranslateEnabled) {
+      final i = sub.indexWhere((e) => !e.lan.contains('zh'));
+      if (i != -1) idx = i + 1;
+    }
     await setSubtitle(idx);
   }
 

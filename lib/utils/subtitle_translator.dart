@@ -304,7 +304,7 @@ abstract final class SubtitleTranslator {
   // 同一字幕地址（同一视频同一语言）译一次就落盘，重进视频/重开 App 直接复用，
   // 不再逐批重译。键里带通道配置与显示模式，换模型或切换「双语/仅译文」会自动失效。
   static const String _vttIndexKey = 'sub_vtt_index';
-  static const int _vttCacheLimit = 60;
+  static const int _vttCacheLimit = 20;
 
   static String _vttKey(String url) {
     final raw =

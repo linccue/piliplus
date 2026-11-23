@@ -117,7 +117,7 @@ abstract final class SubtitleTranslator {
 
     final res = await _request(batch);
     if (res != null) {
-      _writeCache(key, res);
+      await _writeCache(key, res);
       return res;
     }
     if (batch.length == 1) return null;
@@ -294,9 +294,82 @@ abstract final class SubtitleTranslator {
     }
   }
 
-  static void _writeCache(String key, List<String> value) {
+  static Future<void> _writeCache(String key, List<String> value) async {
     try {
-      GStorage.localCache.put(key, jsonEncode(value));
+      await GStorage.localCache.put(key, jsonEncode(value));
+    } catch (_) {}
+  }
+
+  // ===== 整段字幕缓存 =====
+  // 同一字幕地址（同一视频同一语言）译一次就落盘，重进视频/重开 App 直接复用，
+  // 不再逐批重译。键里带通道配置与显示模式，换模型或切换「双语/仅译文」会自动失效。
+  static const String _vttIndexKey = 'sub_vtt_index';
+  static const int _vttCacheLimit = 60;
+
+  static String _vttKey(String url) {
+    final raw =
+        '${Pref.subtitleTranslateBaseUrl.trim()}'
+        '|${Pref.subtitleTranslateModel.trim()}'
+        '|${Pref.subtitleTranslateMode}'
+        '|$url';
+    return 'sub_vtt_${sha1.convert(utf8.encode(raw))}';
+  }
+
+  /// 读取已缓存的翻译后 vtt；没有命中返回 null
+  static String? readVttCache(String url) {
+    try {
+      final cached = GStorage.localCache.get(_vttKey(url));
+      return cached is String && cached.isNotEmpty ? cached : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// 保存翻译后 vtt，并按 LRU 限制缓存条数
+  static Future<void> writeVttCache(String url, String vtt) async {
+    if (vtt.isEmpty) return;
+    final key = _vttKey(url);
+    try {
+      await GStorage.localCache.put(key, vtt);
+      final index =
+          (GStorage.localCache.get(_vttIndexKey) as List?)
+              ?.map((e) => '$e')
+              .toList() ??
+          <String>[];
+      index.remove(key);
+      index.add(key);
+      while (index.length > _vttCacheLimit) {
+        await GStorage.localCache.delete(index.removeAt(0));
+      }
+      await GStorage.localCache.put(_vttIndexKey, index);
+    } catch (_) {}
+  }
+
+  /// 清掉某个字幕地址的缓存（用户手动要求重新翻译时用）
+  static Future<void> clearVttCache(String url) async {
+    final key = _vttKey(url);
+    try {
+      await GStorage.localCache.delete(key);
+      final index =
+          (GStorage.localCache.get(_vttIndexKey) as List?)
+              ?.map((e) => '$e')
+              .toList();
+      if (index != null && index.remove(key)) {
+        await GStorage.localCache.put(_vttIndexKey, index);
+      }
+    } catch (_) {}
+  }
+
+  /// 清空全部字幕翻译缓存（整段 vtt 与分批文本）
+  static Future<void> clearAllVttCache() async {
+    try {
+      final keys = GStorage.localCache.keys
+          .where((k) =>
+              '$k'.startsWith('sub_vtt_') || '$k'.startsWith('sub_trans_'))
+          .toList();
+      for (final k in keys) {
+        await GStorage.localCache.delete(k);
+      }
     } catch (_) {}
   }
 }

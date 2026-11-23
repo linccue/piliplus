@@ -1196,6 +1196,10 @@ class VideoDetailController extends GetxController
         !rawSub.lan.contains('zh') && SubtitleTranslator.enabled;
     if (!needTranslate) return VideoHttp.getSubtitles(url);
 
+    // 译过一次就直接用本地缓存，不再联网重译
+    final cached = SubtitleTranslator.readVttCache(url);
+    if (cached != null) return cached;
+
     final body = await VideoHttp.getSubtitleBody(url);
     if (isClosed) return null;
     if (body == null || body.isEmpty) return VideoHttp.getSubtitles(url);
@@ -1220,13 +1224,21 @@ class VideoDetailController extends GetxController
       SmartDialog.dismiss();
     }
     SmartDialog.showToast(failed ? '字幕翻译失败，已使用原文' : '字幕已翻译');
+    if (!failed && vtt != null) {
+      await SubtitleTranslator.writeVttCache(url, vtt);
+    }
     return vtt;
   }
 
-  /// 字幕翻译开关变化后，重新加载当前字幕
+  /// 字幕翻译开关/模式变化后，重新加载当前字幕
   Future<void> refreshSubtitleTranslation() async {
     final index = vttSubtitlesIndex.value;
     if (index <= 0) return;
+    final sub = subtitles[index - 1];
+    final url = sub.subtitleUrl;
+    if (url != null && url.isNotEmpty) {
+      await SubtitleTranslator.clearVttCache(url);
+    }
     vttSubtitles.clear();
     await setSubtitle(index);
   }

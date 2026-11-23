@@ -78,7 +78,7 @@ class _SubtitleTranslateSettingState extends State<SubtitleTranslateSetting> {
         children: [
           const SetSwitchItem(
             title: '启用字幕翻译',
-            subtitle: '播放外语字幕时自动翻译成简体中文，结果缓存在本地',
+            subtitle: '播放外语字幕时自动翻译成简体中文，翻译过的字幕会保存到本地复用',
             setKey: SettingBoxKey.subtitleTranslateEnabled,
             leading: Icon(Icons.translate),
           ),
@@ -121,7 +121,8 @@ class _SubtitleTranslateSettingState extends State<SubtitleTranslateSetting> {
               '默认使用腾讯混元翻译专用模型 hunyuan-translation（33 种语言互译）：免费、国内直连、不需要代理。'
               '在腾讯云控制台「TokenHub」创建 API Key，模型权限勾选 hunyuan-translation。'
               '字幕按 20 句一批串行翻译，成功一批缓存一批，失败的批次会自动拆半重试；'
-              '换模型或换地址会重新翻译。B 站本身已有中文（含 AI）字幕的视频不会走翻译。',
+              '整段译完会把字幕全文存进本地，同一个视频再次打开直接读缓存、不再联网重译。'
+              '换模型、换地址或切换「双语/仅译文」会重新翻译。B 站本身已有中文（含 AI）字幕的视频不会走翻译。',
               style: hintStyle,
             ),
           ),
@@ -167,6 +168,19 @@ class _SubtitleTranslateSettingState extends State<SubtitleTranslateSetting> {
             title: const Text('测试接口'),
             subtitle: Text('依次试主通道和备用通道', style: hintStyle),
             onTap: _test,
+          ),
+          const Divider(height: 1),
+          ListTile(
+            leading: const Icon(Icons.delete_sweep_outlined),
+            title: const Text('清除翻译缓存'),
+            subtitle: Text(
+              '删掉已保存的翻译结果，再次播放该视频会重新翻译',
+              style: hintStyle,
+            ),
+            onTap: () async {
+              await SubtitleTranslator.clearAllVttCache();
+              SmartDialog.showToast('字幕翻译缓存已清除');
+            },
           ),
         ],
       ),

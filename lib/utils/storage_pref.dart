@@ -274,6 +274,28 @@ abstract final class Pref {
 
   static String get subtitleTranslateApiKey =>
       _setting.get(SettingBoxKey.subtitleTranslateApiKey, defaultValue: '');
+
+  // ===== 字幕翻译：备用通道（智谱 GLM-4.7-Flash） =====
+  static bool get subtitleTranslateFallbackEnabled => _setting.get(
+    SettingBoxKey.subtitleTranslateFallbackEnabled,
+    defaultValue: true,
+  );
+
+  static String get subtitleTranslateFallbackBaseUrl => _setting.get(
+    SettingBoxKey.subtitleTranslateFallbackBaseUrl,
+    defaultValue: 'https://open.bigmodel.cn/api/paas/v4',
+  );
+
+  static String get subtitleTranslateFallbackModel => _setting.get(
+    SettingBoxKey.subtitleTranslateFallbackModel,
+    defaultValue: 'glm-4.7-flash',
+  );
+
+  static String get subtitleTranslateFallbackApiKey => _setting.get(
+    SettingBoxKey.subtitleTranslateFallbackApiKey,
+    defaultValue: '',
+  );
+  // ================================================
   // ===================
 
   static bool get useRelativeSlide =>

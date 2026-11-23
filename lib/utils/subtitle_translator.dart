@@ -37,9 +37,10 @@ abstract final class SubtitleTranslator {
     ),
   );
 
-  /// 是否具备翻译条件（开关已开且填了密钥）
+  /// 是否具备翻译条件（开关已开且至少有可用通道）
   static bool get enabled =>
-      Pref.subtitleTranslateEnabled && Pref.subtitleTranslateApiKey.isNotEmpty;
+      Pref.subtitleTranslateEnabled &&
+      (Pref.subtitleTranslateApiKey.isNotEmpty || _fallbackProvider != null);
 
   /// 翻译 B 站字幕 body（`[{from,to,content}]`），返回同样结构的列表
   static Future<List<Map<String, dynamic>>?> translate(List body) async {
@@ -68,11 +69,33 @@ abstract final class SubtitleTranslator {
     return out;
   }
 
-  /// 测试接口是否可用，返回试译结果
-  static Future<String?> test() async {
-    final res = await _translateLines(const ['Hello, world.']);
-    if (res == null || res.isEmpty) return null;
-    return res.first;
+  /// 测试接口：先试主通道，失败再试备用通道
+  static Future<({bool ok, String text, bool viaFallback})> test() async {
+    const lines = ['Hello, world.'];
+    final primaryApiKey = Pref.subtitleTranslateApiKey.trim();
+    if (primaryApiKey.isNotEmpty) {
+      final res = await _requestProvider(
+        (
+          baseUrl: Pref.subtitleTranslateBaseUrl,
+          model: Pref.subtitleTranslateModel,
+          apiKey: primaryApiKey,
+        ),
+        lines,
+      );
+      if (res != null && res.isNotEmpty) {
+        return (ok: true, text: res.first, viaFallback: false);
+      }
+    }
+
+    final fallback = _fallbackProvider;
+    if (fallback == null) {
+      return (ok: false, text: '', viaFallback: false);
+    }
+    final res = await _requestProvider(fallback, lines);
+    if (res != null && res.isNotEmpty) {
+      return (ok: true, text: res.first, viaFallback: true);
+    }
+    return (ok: false, text: '', viaFallback: true);
   }
 
   static Future<List<String>?> _translateLines(List<String> lines) async {
@@ -108,8 +131,45 @@ abstract final class SubtitleTranslator {
   }
 
   static Future<List<String>?> _request(List<String> batch) async {
+    // 主通道：腾讯混元
+    final primaryApiKey = Pref.subtitleTranslateApiKey.trim();
+    if (primaryApiKey.isNotEmpty) {
+      final res = await _requestProvider(
+        (
+          baseUrl: Pref.subtitleTranslateBaseUrl,
+          model: Pref.subtitleTranslateModel,
+          apiKey: primaryApiKey,
+        ),
+        batch,
+      );
+      if (res != null) return res;
+    }
+
+    // 备用通道：智谱 GLM-4.7-Flash
+    final fallback = _fallbackProvider;
+    if (fallback == null) return null;
+    return _requestProvider(fallback, batch);
+  }
+
+  /// 备用通道配置，未启用或没填密钥时不参与
+  static ({String baseUrl, String model, String apiKey})?
+  get _fallbackProvider {
+    final apiKey = Pref.subtitleTranslateFallbackApiKey.trim();
+    if (!Pref.subtitleTranslateFallbackEnabled || apiKey.isEmpty) return null;
+    return (
+      baseUrl: Pref.subtitleTranslateFallbackBaseUrl,
+      model: Pref.subtitleTranslateFallbackModel,
+      apiKey: apiKey,
+    );
+  }
+
+  static Future<List<String>?> _requestProvider(
+    ({String baseUrl, String model, String apiKey}) provider,
+    List<String> batch,
+  ) async {
     // 优先让模型返回 JSON 数组，按行数对齐最稳
-    var res = await _requestWith(
+    final res = await _requestWith(
+      provider: provider,
       prompt: _promptJson,
       content: jsonEncode(batch),
       expect: batch.length,
@@ -119,6 +179,7 @@ abstract final class SubtitleTranslator {
 
     // 有些翻译专用模型不按 JSON 输出，退回分隔符格式再试一次
     return _requestWith(
+      provider: provider,
       prompt: _promptSplit,
       content: batch.join('\n$_split\n'),
       expect: batch.length,
@@ -127,16 +188,15 @@ abstract final class SubtitleTranslator {
   }
 
   static Future<List<String>?> _requestWith({
+    required ({String baseUrl, String model, String apiKey}) provider,
     required String prompt,
     required String content,
     required int expect,
     required List<String>? Function(String) parse,
   }) async {
-    final base = Pref.subtitleTranslateBaseUrl
-        .trim()
-        .replaceAll(RegExp(r'/+$'), '');
+    final base = provider.baseUrl.trim().replaceAll(RegExp(r'/+$'), '');
     final data = {
-      'model': Pref.subtitleTranslateModel.trim(),
+      'model': provider.model.trim(),
       'temperature': 0,
       'stream': false,
       'messages': [
@@ -152,7 +212,7 @@ abstract final class SubtitleTranslator {
           data: data,
           options: Options(
             headers: {
-              'Authorization': 'Bearer ${Pref.subtitleTranslateApiKey.trim()}',
+              'Authorization': 'Bearer ${provider.apiKey.trim()}',
             },
           ),
         );

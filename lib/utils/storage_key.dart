@@ -208,7 +208,11 @@ abstract final class SettingBoxKey {
       subtitleTranslateMode = 'subtitleTranslateMode',
       subtitleTranslateBaseUrl = 'subtitleTranslateBaseUrl',
       subtitleTranslateModel = 'subtitleTranslateModel',
-      subtitleTranslateApiKey = 'subtitleTranslateApiKey';
+      subtitleTranslateApiKey = 'subtitleTranslateApiKey',
+      subtitleTranslateFallbackEnabled = 'subtitleTranslateFallbackEnabled',
+      subtitleTranslateFallbackBaseUrl = 'subtitleTranslateFallbackBaseUrl',
+      subtitleTranslateFallbackModel = 'subtitleTranslateFallbackModel',
+      subtitleTranslateFallbackApiKey = 'subtitleTranslateFallbackApiKey';
 
   static const String webdavUri = 'webdavUri',
       webdavUsername = 'webdavUsername',

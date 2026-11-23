@@ -22,12 +22,24 @@ class _SubtitleTranslateSettingState extends State<SubtitleTranslateSetting> {
   );
   late final _model = TextEditingController(text: Pref.subtitleTranslateModel);
   late final _apiKey = TextEditingController(text: Pref.subtitleTranslateApiKey);
+  late final _fbBaseUrl = TextEditingController(
+    text: Pref.subtitleTranslateFallbackBaseUrl,
+  );
+  late final _fbModel = TextEditingController(
+    text: Pref.subtitleTranslateFallbackModel,
+  );
+  late final _fbApiKey = TextEditingController(
+    text: Pref.subtitleTranslateFallbackApiKey,
+  );
 
   @override
   void dispose() {
     _baseUrl.dispose();
     _model.dispose();
     _apiKey.dispose();
+    _fbBaseUrl.dispose();
+    _fbModel.dispose();
+    _fbApiKey.dispose();
     super.dispose();
   }
 
@@ -36,16 +48,20 @@ class _SubtitleTranslateSettingState extends State<SubtitleTranslateSetting> {
   }
 
   Future<void> _test() async {
-    if (Pref.subtitleTranslateApiKey.trim().isEmpty) {
-      SmartDialog.showToast('请先填写 API Key');
+    if (Pref.subtitleTranslateApiKey.trim().isEmpty &&
+        Pref.subtitleTranslateFallbackApiKey.trim().isEmpty) {
+      SmartDialog.showToast('请先填写至少一个通道的 API Key');
       return;
     }
     SmartDialog.showLoading(msg: '正在测试');
     final res = await SubtitleTranslator.test();
     SmartDialog.dismiss();
-    SmartDialog.showToast(
-      res == null ? '翻译失败，请检查接口地址、模型与密钥' : '翻译成功：$res',
-    );
+    final msg = res.ok
+        ? (res.viaFallback
+              ? '主通道失败，备用通道成功：${res.text}'
+              : '主通道成功：${res.text}')
+        : '两个通道都失败，请检查地址、模型与密钥';
+    SmartDialog.showToast(msg);
   }
 
   @override
@@ -109,10 +125,47 @@ class _SubtitleTranslateSettingState extends State<SubtitleTranslateSetting> {
               style: hintStyle,
             ),
           ),
+          const Divider(height: 1),
+          const SetSwitchItem(
+            title: '启用备用通道',
+            subtitle: '主通道失败时自动切到智谱 GLM-4.7-Flash，需填写备用密钥',
+            setKey: SettingBoxKey.subtitleTranslateFallbackEnabled,
+            leading: Icon(Icons.swap_horiz),
+          ),
+          _buildField(
+            label: '备用接口地址',
+            controller: _fbBaseUrl,
+            hint: 'https://open.bigmodel.cn/api/paas/v4',
+            onChanged: (v) =>
+                _save(SettingBoxKey.subtitleTranslateFallbackBaseUrl, v),
+          ),
+          _buildField(
+            label: '备用模型',
+            controller: _fbModel,
+            hint: 'glm-4.7-flash',
+            onChanged: (v) =>
+                _save(SettingBoxKey.subtitleTranslateFallbackModel, v),
+          ),
+          _buildField(
+            label: '备用 API Key',
+            controller: _fbApiKey,
+            hint: '智谱开放平台（bigmodel.cn）创建的 API Key',
+            onChanged: (v) =>
+                _save(SettingBoxKey.subtitleTranslateFallbackApiKey, v),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            child: Text(
+              '备用通道用 glm-4.7-flash：免费、200K 上下文，但免费档并发很低，'
+              '同一时间只会有一个请求；主通道靠不住时才会被叫起来。',
+              style: hintStyle,
+            ),
+          ),
+          const Divider(height: 1),
           ListTile(
             leading: const Icon(Icons.wifi_tethering),
             title: const Text('测试接口'),
-            subtitle: Text('发送 "Hello, world." 试译一句', style: hintStyle),
+            subtitle: Text('依次试主通道和备用通道', style: hintStyle),
             onTap: _test,
           ),
         ],

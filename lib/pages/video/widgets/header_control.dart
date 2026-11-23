@@ -1311,6 +1311,45 @@ class HeaderControlState extends State<HeaderControl>
                       height: 45,
                       child: Center(child: Text('字幕设置', style: titleStyle)),
                     ),
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Row(
+                        children: [
+                          const Expanded(
+                            child: Column(
+                              crossAxisAlignment: .start,
+                              children: [
+                                Text('字幕翻译', style: titleStyle),
+                                Text(
+                                  '外语 → 简体中文',
+                                  style: TextStyle(fontSize: 12),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Transform.scale(
+                            scale: 0.8,
+                            child: Switch(
+                              value: Pref.subtitleTranslateEnabled,
+                              onChanged: (val) {
+                                GStorage.setting.put(
+                                  SettingBoxKey.subtitleTranslateEnabled,
+                                  val,
+                                );
+                                setState(() {});
+                                if (val &&
+                                    Pref.subtitleTranslateApiKey.isEmpty) {
+                                  SmartDialog.showToast(
+                                    '请先在「播放设置 → 字幕翻译设置」填写密钥',
+                                  );
+                                }
+                                videoDetailCtr.refreshSubtitleTranslation();
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                     const SizedBox(height: 10),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,

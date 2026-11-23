@@ -254,6 +254,28 @@ abstract final class Pref {
         defaultValue: SubtitlePrefType.off.index,
       )];
 
+  // ===== 字幕翻译 =====
+  static bool get subtitleTranslateEnabled =>
+      _setting.get(SettingBoxKey.subtitleTranslateEnabled, defaultValue: false);
+
+  /// 0 = 双语（原文 + 译文），1 = 仅译文
+  static int get subtitleTranslateMode =>
+      _setting.get(SettingBoxKey.subtitleTranslateMode, defaultValue: 0);
+
+  static String get subtitleTranslateBaseUrl => _setting.get(
+    SettingBoxKey.subtitleTranslateBaseUrl,
+    defaultValue: 'https://api.hunyuan.cloud.tencent.com/v1',
+  );
+
+  static String get subtitleTranslateModel => _setting.get(
+    SettingBoxKey.subtitleTranslateModel,
+    defaultValue: 'hunyuan-translation',
+  );
+
+  static String get subtitleTranslateApiKey =>
+      _setting.get(SettingBoxKey.subtitleTranslateApiKey, defaultValue: '');
+  // ===================
+
   static bool get useRelativeSlide =>
       _setting.get(SettingBoxKey.useRelativeSlide, defaultValue: false);
 

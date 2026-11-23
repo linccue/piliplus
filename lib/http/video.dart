@@ -943,6 +943,15 @@ abstract final class VideoHttp {
     return null;
   }
 
+  /// 拉取字幕原始 body：[{from, to, content}]，用于翻译后再自行生成 vtt
+  static Future<List?> getSubtitleBody(String subtitleUrl) async {
+    try {
+      final res = await Request().get(subtitleUrl.http2https);
+      if (res.data?['body'] case List list) return list;
+    } catch (_) {}
+    return null;
+  }
+
   // 视频排行
   static Future<LoadingState<List<HotVideoItemModel>>> getRankVideoList(
     int rid,

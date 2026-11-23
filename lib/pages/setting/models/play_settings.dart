@@ -8,6 +8,7 @@ import 'package:PiliPlus/models/common/super_resolution_type.dart';
 import 'package:PiliPlus/models/common/video/subtitle_pref_type.dart';
 import 'package:PiliPlus/pages/setting/models/model.dart';
 import 'package:PiliPlus/pages/setting/pages/fullscreen_sc.dart';
+import 'package:PiliPlus/pages/setting/pages/subtitle_translate_setting.dart';
 import 'package:PiliPlus/pages/setting/widgets/select_dialog.dart';
 import 'package:PiliPlus/pages/setting/widgets/slider_dialog.dart';
 import 'package:PiliPlus/plugin/pl_player/models/bottom_progress_behavior.dart';
@@ -261,6 +262,19 @@ List<SettingsModel> get playSettings => [
     leading: const Icon(Icons.closed_caption_outlined),
     getSubtitle: () => '当前选择偏好：${Pref.subtitlePreferenceV2.desc}',
     onTap: _showSubtitleDialog,
+  ),
+  const SwitchModel(
+    title: '自动翻译字幕',
+    subtitle: '外语字幕自动翻译成简体中文，需先配置接口',
+    leading: Icon(Icons.translate),
+    setKey: SettingBoxKey.subtitleTranslateEnabled,
+    defaultVal: false,
+  ),
+  NormalModel(
+    title: '字幕翻译设置',
+    subtitle: '接口地址、模型、密钥（默认腾讯混元）',
+    leading: const Icon(Icons.translate),
+    onTap: (_, _) => Get.to(const SubtitleTranslateSetting()),
   ),
   if (PlatformUtils.isDesktop)
     SwitchModel(

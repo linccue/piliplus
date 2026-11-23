@@ -65,6 +65,7 @@ import 'package:PiliPlus/utils/reply_scheme_helper.dart';
 import 'package:PiliPlus/utils/storage.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:PiliPlus/utils/subtitle_utils.dart';
+import 'package:PiliPlus/utils/subtitle_translator.dart';
 import 'package:PiliPlus/utils/theme_utils.dart';
 import 'package:PiliPlus/utils/utils.dart';
 import 'package:PiliPlus/utils/video_utils.dart';
@@ -1173,9 +1174,7 @@ class VideoDetailController extends GetxController
           fileName: PathUtils.subtitleExt,
         );
       } else {
-        final result = await VideoHttp.getSubtitles(
-          subtitles[index - 1].subtitleUrl!,
-        );
+        final result = await _fetchRemoteSubtitleVtt(subtitles[index - 1]);
         if (!isClosed && result != null) {
           subtitle = (isData: true, id: result);
           vttSubtitles[index - 1] = subtitle;
@@ -1186,6 +1185,50 @@ class VideoDetailController extends GetxController
     }
     if (subtitle == null) return;
     await _setSub(index, subtitle);
+  }
+
+  /// 拉取远程字幕；外语字幕且开了字幕翻译时，先译成中文再生成 vtt
+  Future<String?> _fetchRemoteSubtitleVtt(Subtitle rawSub) async {
+    final url = rawSub.subtitleUrl;
+    if (url == null || url.isEmpty) return null;
+
+    final needTranslate =
+        !rawSub.lan.contains('zh') && SubtitleTranslator.enabled;
+    if (!needTranslate) return VideoHttp.getSubtitles(url);
+
+    final body = await VideoHttp.getSubtitleBody(url);
+    if (isClosed) return null;
+    if (body == null || body.isEmpty) return VideoHttp.getSubtitles(url);
+
+    SmartDialog.showLoading(msg: '正在翻译字幕');
+    String? vtt;
+    var failed = true;
+    try {
+      final translated = await SubtitleTranslator.translate(body);
+      if (isClosed) return null;
+      failed = translated == null;
+      vtt = await compute<List, String>(
+        SubtitleUtils.json2Vtt,
+        translated ?? body,
+      );
+    } catch (_) {
+      failed = true;
+      try {
+        vtt = await compute<List, String>(SubtitleUtils.json2Vtt, body);
+      } catch (_) {}
+    } finally {
+      SmartDialog.dismiss();
+    }
+    SmartDialog.showToast(failed ? '字幕翻译失败，已使用原文' : '字幕已翻译');
+    return vtt;
+  }
+
+  /// 字幕翻译开关变化后，重新加载当前字幕
+  Future<void> refreshSubtitleTranslation() async {
+    final index = vttSubtitlesIndex.value;
+    if (index <= 0) return;
+    vttSubtitles.clear();
+    await setSubtitle(index);
   }
 
   Future<void> _setSub(int index, SubtitleData subtitle) async {

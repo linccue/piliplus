@@ -1,0 +1,242 @@
+import 'dart:convert';
+import 'dart:math' as math;
+
+import 'package:PiliPlus/utils/storage.dart';
+import 'package:PiliPlus/utils/storage_pref.dart';
+import 'package:crypto/crypto.dart';
+import 'package:dio/dio.dart';
+
+/// 字幕翻译
+///
+/// 默认走腾讯混元翻译专用模型（OpenAI 兼容接口，国内直连）。
+/// 只翻译文本，`from`/`to` 时间轴原样保留，因此不会出现时间错位。
+abstract final class SubtitleTranslator {
+  /// 单次请求携带的字幕条数，太长容易碰到模型输入上限或触发限流
+  static const int _batchSize = 20;
+  static const int _maxRetry = 2;
+
+  /// 分隔符模式使用的分隔标记
+  static const String _split = '<<<SPLIT>>>';
+
+  static const String _promptJson = '''
+你是专业的影视字幕译者。输入是一个 JSON 字符串数组，每项是一句字幕。
+请逐条翻译成简体中文：保持口语化、简洁自然，不要合并或拆分句子，不要补充解释，保留原有语气。
+只输出一个与输入等长的 JSON 字符串数组（纯 JSON，不要 markdown 代码块，不要任何说明文字），元素顺序与输入完全一致。''';
+
+  static const String _promptSplit = '''
+你是专业的影视字幕译者。输入是用 $_split 分隔的多句字幕。
+请逐句翻译成简体中文：保持口语化、简洁自然，不要合并或拆分句子，不要补充解释，保留原有语气。
+输出时用同样的 $_split 分隔每一句译文，句数必须与输入完全一致，不要输出任何多余内容。''';
+
+  static final Dio _dio = Dio(
+    BaseOptions(
+      connectTimeout: const Duration(seconds: 20),
+      sendTimeout: const Duration(seconds: 30),
+      receiveTimeout: const Duration(seconds: 90),
+      headers: const {'Content-Type': 'application/json'},
+    ),
+  );
+
+  /// 是否具备翻译条件（开关已开且填了密钥）
+  static bool get enabled =>
+      Pref.subtitleTranslateEnabled && Pref.subtitleTranslateApiKey.isNotEmpty;
+
+  /// 翻译 B 站字幕 body（`[{from,to,content}]`），返回同样结构的列表
+  static Future<List<Map<String, dynamic>>?> translate(List body) async {
+    final sources = <String>[];
+    for (final item in body) {
+      sources.add(item is Map ? '${item['content'] ?? ''}'.trim() : '');
+    }
+    if (sources.isEmpty) return null;
+
+    final results = await _translateLines(sources);
+    if (results == null || results.length != sources.length) return null;
+
+    final keepOriginal = Pref.subtitleTranslateMode == 0;
+    final out = <Map<String, dynamic>>[];
+    for (var i = 0; i < body.length; i++) {
+      final item = body[i];
+      if (item is! Map) return null;
+      final src = sources[i];
+      final dst = results[i].trim();
+      out.add({
+        'from': item['from'],
+        'to': item['to'],
+        'content': dst.isEmpty ? src : (keepOriginal ? '$src\n$dst' : dst),
+      });
+    }
+    return out;
+  }
+
+  /// 测试接口是否可用，返回试译结果
+  static Future<String?> test() async {
+    final res = await _translateLines(const ['Hello, world.']);
+    if (res == null || res.isEmpty) return null;
+    return res.first;
+  }
+
+  static Future<List<String>?> _translateLines(List<String> lines) async {
+    final out = <String>[];
+    for (var start = 0; start < lines.length; start += _batchSize) {
+      final end = math.min(start + _batchSize, lines.length);
+      final res = await _translateBatch(lines.sublist(start, end));
+      if (res == null) return null;
+      out.addAll(res);
+    }
+    return out;
+  }
+
+  /// 带缓存与二分降级：整批失败就拆半重试，避免个别超长句子拖死整集
+  static Future<List<String>?> _translateBatch(List<String> batch) async {
+    final key = _cacheKey(batch);
+    final cached = _readCache(key, batch.length);
+    if (cached != null) return cached;
+
+    final res = await _request(batch);
+    if (res != null) {
+      _writeCache(key, res);
+      return res;
+    }
+    if (batch.length == 1) return null;
+
+    final mid = batch.length ~/ 2;
+    final left = await _translateBatch(batch.sublist(0, mid));
+    if (left == null) return null;
+    final right = await _translateBatch(batch.sublist(mid));
+    if (right == null) return null;
+    return [...left, ...right];
+  }
+
+  static Future<List<String>?> _request(List<String> batch) async {
+    // 优先让模型返回 JSON 数组，按行数对齐最稳
+    var res = await _requestWith(
+      prompt: _promptJson,
+      content: jsonEncode(batch),
+      expect: batch.length,
+      parse: _parseArray,
+    );
+    if (res != null) return res;
+
+    // 有些翻译专用模型不按 JSON 输出，退回分隔符格式再试一次
+    return _requestWith(
+      prompt: _promptSplit,
+      content: batch.join('\n$_split\n'),
+      expect: batch.length,
+      parse: _parseSplit,
+    );
+  }
+
+  static Future<List<String>?> _requestWith({
+    required String prompt,
+    required String content,
+    required int expect,
+    required List<String>? Function(String) parse,
+  }) async {
+    final base = Pref.subtitleTranslateBaseUrl
+        .trim()
+        .replaceAll(RegExp(r'/+$'), '');
+    final data = {
+      'model': Pref.subtitleTranslateModel.trim(),
+      'temperature': 0,
+      'stream': false,
+      'messages': [
+        {'role': 'system', 'content': prompt},
+        {'role': 'user', 'content': content},
+      ],
+    };
+
+    for (var attempt = 0; attempt <= _maxRetry; attempt++) {
+      try {
+        final res = await _dio.post(
+          '$base/chat/completions',
+          data: data,
+          options: Options(
+            headers: {
+              'Authorization': 'Bearer ${Pref.subtitleTranslateApiKey.trim()}',
+            },
+          ),
+        );
+        final text = _contentOf(res.data);
+        if (text != null) {
+          final list = parse(text);
+          if (list != null && list.length == expect) {
+            return list.map((e) => e.trim()).toList();
+          }
+        }
+      } catch (_) {}
+      if (attempt < _maxRetry) {
+        await Future.delayed(Duration(milliseconds: 600 * (attempt + 1)));
+      }
+    }
+    return null;
+  }
+
+  static String? _contentOf(dynamic data) {
+    if (data is! Map) return null;
+    final choices = data['choices'];
+    if (choices is! List || choices.isEmpty) return null;
+    final choice = choices.first;
+    if (choice is! Map) return null;
+    final message = choice['message'];
+    if (message is! Map) return null;
+    final content = message['content'];
+    return content is String ? content : null;
+  }
+
+  static List<String>? _parseArray(String text) {
+    var s = _stripFence(text);
+    final start = s.indexOf('[');
+    final end = s.lastIndexOf(']');
+    if (start == -1 || end <= start) return null;
+    try {
+      final list = jsonDecode(s.substring(start, end + 1));
+      if (list is! List) return null;
+      return list.map((e) => e is String ? e : '$e').toList();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static List<String>? _parseSplit(String text) {
+    final s = _stripFence(text).trim();
+    if (s.isEmpty) return null;
+    final parts = s.split(RegExp(r'\s*' + _split + r'\s*'));
+    if (parts.length < 2) return null;
+    return parts;
+  }
+
+  static String _stripFence(String text) {
+    var s = text.trim();
+    if (s.startsWith('```')) {
+      final first = s.indexOf('\n');
+      if (first != -1) s = s.substring(first + 1);
+      if (s.endsWith('```')) s = s.substring(0, s.length - 3);
+    }
+    return s;
+  }
+
+  static String _cacheKey(List<String> batch) {
+    final raw =
+        '${Pref.subtitleTranslateBaseUrl.trim()}'
+        '|${Pref.subtitleTranslateModel.trim()}'
+        '|${batch.join('\u0001')}';
+    return 'sub_trans_${sha1.convert(utf8.encode(raw))}';
+  }
+
+  static List<String>? _readCache(String key, int length) {
+    final cached = GStorage.localCache.get(key);
+    if (cached is! String || cached.isEmpty) return null;
+    try {
+      final list = (jsonDecode(cached) as List).cast<String>();
+      return list.length == length ? list : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static void _writeCache(String key, List<String> value) {
+    try {
+      GStorage.localCache.put(key, jsonEncode(value));
+    } catch (_) {}
+  }
+}

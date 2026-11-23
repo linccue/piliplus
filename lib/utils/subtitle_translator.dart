@@ -329,13 +329,48 @@ abstract final class SubtitleTranslator {
   static const String _vttIndexKey = 'sub_vtt_index';
   static const int _vttCacheLimit = 20;
 
+  /// 字幕地址归一化。
+  ///
+  /// B 站的 AI 字幕地址带签名，形如
+  /// `https://aisubtitle.hdslb.com/bfs/subtitle/<hash>.json?auth_key=<ts>-<sig>-0-<sig>`，
+  /// 每拉一次播放信息 `auth_key` 都不一样。直接拿整条地址当缓存键，重进视频
+  /// 必然被当成新字幕再翻一遍。这里只保留 host + path（auth_key 不影响内容）。
+  static String normalizeUrl(String url) {
+    var u = url.trim();
+    if (u.isEmpty) return u;
+    // local:// 之类的是本地自建键（路径 + 大小 + 修改时间），原样保留
+    if (!u.startsWith('http') && !u.startsWith('//')) return u;
+    final q = u.indexOf('?');
+    if (q != -1) u = u.substring(0, q);
+    final h = u.indexOf('#');
+    if (h != -1) u = u.substring(0, h);
+    if (u.startsWith('//')) u = 'https:$u';
+    if (u.startsWith('http://')) u = 'https://${u.substring(7)}';
+    return u.toLowerCase();
+  }
+
   static String _vttKey(String url) {
     final raw =
         '${Pref.subtitleTranslateBaseUrl.trim()}'
         '|${Pref.subtitleTranslateModel.trim()}'
         '|${Pref.subtitleTranslateMode}'
-        '|$url';
+        '|${normalizeUrl(url)}';
     return 'sub_vtt_${sha1.convert(utf8.encode(raw))}';
+  }
+
+  /// 该字幕的每一批是否都已经有译文（用于重载时不再弹「正在翻译字幕」）
+  static bool isFullyCached(List body) {
+    final sources = <String>[
+      for (final item in body)
+        item is Map ? '${item['content'] ?? ''}'.trim() : '',
+    ];
+    if (sources.isEmpty) return false;
+    for (var start = 0; start < sources.length; start += _batchSize) {
+      final end = math.min(start + _batchSize, sources.length);
+      final batch = sources.sublist(start, end);
+      if (_readCache(_cacheKey(batch), batch.length) == null) return false;
+    }
+    return true;
   }
 
   /// 读取已缓存的翻译后 vtt；没有命中返回 null

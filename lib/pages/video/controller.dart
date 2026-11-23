@@ -1339,6 +1339,7 @@ class VideoDetailController extends GetxController
     if (!needTranslate) return VideoHttp.getSubtitles(url);
 
     // 译过一次就直接用本地缓存，不再联网重译
+    // （缓存键已剔除 auth_key，重进视频 / 重开 App 都能命中）
     final cached = SubtitleTranslator.readVttCache(url);
     if (cached != null) return cached;
 
@@ -1346,7 +1347,9 @@ class VideoDetailController extends GetxController
     if (isClosed) return null;
     if (body == null || body.isEmpty) return VideoHttp.getSubtitles(url);
 
-    SmartDialog.showLoading(msg: '正在翻译字幕');
+    // 分批译文都在本地时不再弹「正在翻译字幕」，直接拼装出译文
+    final quiet = SubtitleTranslator.isFullyCached(body);
+    if (!quiet) SmartDialog.showLoading(msg: '正在翻译字幕');
     String? vtt;
     var failed = true;
     try {
@@ -1363,7 +1366,7 @@ class VideoDetailController extends GetxController
         vtt = await compute<List, String>(SubtitleUtils.json2Vtt, body);
       } catch (_) {}
     } finally {
-      SmartDialog.dismiss();
+      if (!quiet) SmartDialog.dismiss();
     }
     SmartDialog.showToast(failed ? '字幕翻译失败，已使用原文' : '字幕已翻译');
     if (!failed && vtt != null) {

@@ -1123,6 +1123,30 @@ class VideoDetailController extends GetxController
   final RxList<Subtitle> subtitles = RxList<Subtitle>();
   final Map<int, SubtitleData> vttSubtitles = {};
   late final vttSubtitlesIndex = (-1).obs;
+
+  /// 本视频的字幕翻译开关：默认跟随全局设置（默认关闭），
+  /// 在播放页手动打开后只记这个视频（bvid），重进同一视频保持开启，别的视频仍默认关闭。
+  String get _subTranslateKey =>
+      'sub_trans_${bvid.isNotEmpty ? bvid : cid.value}';
+
+  bool get subtitleTranslateOn =>
+      SubtitleTranslator.configured &&
+      ((GStorage.localCache.get(_subTranslateKey) as bool?) ??
+          Pref.subtitleTranslateEnabled);
+
+  /// 切换本视频的字幕翻译开关，并立即重新加载当前字幕
+  Future<void> setSubtitleTranslateEnabled(bool value) async {
+    await GStorage.localCache.put(_subTranslateKey, value);
+    // 开启时如果当前没播字幕，自动挑一条能翻的外语字幕
+    if (value && vttSubtitlesIndex.value <= 0 && subtitles.isNotEmpty) {
+      final i = subtitles.indexWhere((e) => !e.lan.contains('zh'));
+      if (i != -1) {
+        await setSubtitle(i + 1);
+        return;
+      }
+    }
+    await refreshSubtitleTranslation();
+  }
   
   Future<SubtitleData?> loadFileSubtitle({
     required String path,
@@ -1134,6 +1158,17 @@ class VideoDetailController extends GetxController
     SubtitleData? data;
     final length = subtitles.length;
     if (SubtitleUtils.isJson(fileName)) {
+      // 译过的同一份文件直接读缓存（键含大小与修改时间）
+      final cacheId = _localSubCacheId(path);
+      if (subtitleTranslateOn) {
+        final cachedVtt = SubtitleTranslator.readVttCache(cacheId);
+        if (cachedVtt != null) {
+          data = (isData: true, id: cachedVtt);
+          vttSubtitles[length] = data;
+          return data;
+        }
+      }
+
       final file = File(path);
       final stream = file.openRead().transform(utf8.decoder);
       final buffer = StringBuffer();
@@ -1142,20 +1177,127 @@ class VideoDetailController extends GetxController
         buffer.write(chunk);
       }
       if (isClosed) return null;
-      String sub = buffer.toString();
-      sub = await compute<List, String>(
+      final decoded = jsonDecode(buffer.toString());
+      final body = decoded is Map ? decoded['body'] : null;
+      if (body is! List) return null;
+
+      // 外语字幕文件先翻成中文再转 vtt
+      final translated = await _translateSubtitleItems(cacheId, body);
+      if (isClosed) return null;
+      final vtt = await compute<List, String>(
         SubtitleUtils.json2Vtt,
-        jsonDecode(sub)['body'],
+        translated ?? body,
       );
       if (isClosed) return null;
-      data = (isData: true, id: sub);
+      data = (isData: true, id: vtt);
       vttSubtitles[length] = data;
     } else {
-      data = (isData: false, id: path);
+      // srt / vtt / ass：能译就译，译不了或不需要翻译就走原文件
+      final vtt = await _translateTextSubtitleFile(
+        path,
+        _subtitleExtOf(fileName),
+      );
+      if (isClosed) return null;
+      data = vtt != null ? (isData: true, id: vtt) : (isData: false, id: path);
       vttSubtitles[length] = data;
     }
     return data;
   }
+
+  static String _subtitleExtOf(String fileName) {
+    final i = fileName.lastIndexOf('.');
+    return i == -1 ? '' : fileName.substring(i).toLowerCase();
+  }
+
+  /// 本地字幕缓存 id：路径 + 大小 + 修改时间，文件换了自动失效
+  static String _localSubCacheId(String path) {
+    try {
+      final stat = File(path).statSync();
+      return 'local://$path?${stat.size}-${stat.modified.millisecondsSinceEpoch}';
+    } catch (_) {
+      return 'local://$path';
+    }
+  }
+
+  /// 翻译 json 字幕条目；未开翻译或内容已是中文时返回 null
+  Future<List?> _translateSubtitleItems(String cacheId, List body) async {
+    if (!subtitleTranslateOn || body.isEmpty) return null;
+    final sources = <String>[
+      for (final e in body) e is Map ? '${e['content'] ?? ''}' : '',
+    ];
+    if (!SubtitleTranslator.needTranslate(sources)) return null;
+
+    SmartDialog.showLoading(msg: '正在翻译字幕');
+    List? out;
+    try {
+      out = await SubtitleTranslator.translate(body);
+    } catch (_) {
+      out = null;
+    } finally {
+      SmartDialog.dismiss();
+    }
+    if (out == null) {
+      SmartDialog.showToast('字幕翻译失败，已使用原文');
+      return null;
+    }
+    SmartDialog.showToast('字幕已翻译');
+    try {
+      final vtt = await compute<List, String>(SubtitleUtils.json2Vtt, out);
+      await SubtitleTranslator.writeVttCache(cacheId, vtt);
+    } catch (_) {}
+    return out;
+  }
+
+  /// 翻译 srt / vtt / ass 字幕文件，返回中文 vtt；不适用时返回 null
+  Future<String?> _translateTextSubtitleFile(String path, String ext) async {
+    if (!subtitleTranslateOn || ext.isEmpty) return null;
+    final cacheId = _localSubCacheId(path);
+    final cached = SubtitleTranslator.readVttCache(cacheId);
+    if (cached != null) return cached;
+
+    String text;
+    try {
+      text = await File(path).readAsString();
+    } catch (_) {
+      return null;
+    }
+    if (isClosed) return null;
+    final items = await compute<Map<String, String>, List<Map<String, dynamic>>?>(
+      _parseSubtitleTextTask,
+      {'text': text, 'ext': ext},
+    );
+    if (items == null || items.isEmpty) return null;
+    if (!SubtitleTranslator.needTranslate(
+      [for (final e in items) '${e['content']}'],
+    )) {
+      return null;
+    }
+
+    SmartDialog.showLoading(msg: '正在翻译字幕');
+    List<Map<String, dynamic>>? translated;
+    try {
+      translated = await SubtitleTranslator.translate(items);
+    } catch (_) {
+      translated = null;
+    } finally {
+      SmartDialog.dismiss();
+    }
+    if (translated == null) {
+      SmartDialog.showToast('字幕翻译失败，已使用原文');
+      return null;
+    }
+    final vtt = await compute<List, String>(
+      SubtitleUtils.json2Vtt,
+      translated,
+    );
+    SmartDialog.showToast('字幕已翻译');
+    await SubtitleTranslator.writeVttCache(cacheId, vtt);
+    return vtt;
+  }
+
+  static List<Map<String, dynamic>>? _parseSubtitleTextTask(
+    Map<String, String> args,
+  ) => SubtitleUtils.parseText(args['text'] ?? '', args['ext'] ?? '');
 
   // 设定字幕轨道
   Future<void> setSubtitle(int index) async {
@@ -1193,7 +1335,7 @@ class VideoDetailController extends GetxController
     if (url == null || url.isEmpty) return null;
 
     final needTranslate =
-        !rawSub.lan.contains('zh') && SubtitleTranslator.enabled;
+        !rawSub.lan.contains('zh') && subtitleTranslateOn;
     if (!needTranslate) return VideoHttp.getSubtitles(url);
 
     // 译过一次就直接用本地缓存，不再联网重译
@@ -1231,12 +1373,25 @@ class VideoDetailController extends GetxController
   }
 
   /// 字幕翻译开关/模式变化后，重新加载当前字幕
-  Future<void> refreshSubtitleTranslation() async {
+  /// [clearCache] 为 true 时连已保存的译文一起清掉（手动要求重新翻译）
+  Future<void> refreshSubtitleTranslation({bool clearCache = false}) async {
     final index = vttSubtitlesIndex.value;
+    if (index == -2) {
+      // 当前是手动加载的本地字幕，重新处理一遍
+      final path =
+          GStorage.localCache.get('local_sub_path_${cid.value}') as String?;
+      if (path != null && path.isNotEmpty) {
+        if (clearCache) {
+          await SubtitleTranslator.clearVttCache(_localSubCacheId(path));
+        }
+        await _autoLoadLocalSubtitle();
+      }
+      return;
+    }
     if (index <= 0) return;
     final sub = subtitles[index - 1];
     final url = sub.subtitleUrl;
-    if (url != null && url.isNotEmpty) {
+    if (clearCache && url != null && url.isNotEmpty) {
       await SubtitleTranslator.clearVttCache(url);
     }
     vttSubtitles.clear();
@@ -1375,7 +1530,7 @@ class VideoDetailController extends GetxController
             : 0,
     };
     // 开了字幕翻译但偏好是「不显示字幕」：自动挑一条能翻的外语字幕
-    if (idx == 0 && Pref.subtitleTranslateEnabled) {
+    if (idx == 0 && subtitleTranslateOn) {
       final i = sub.indexWhere((e) => !e.lan.contains('zh'));
       if (i != -1) idx = i + 1;
     }

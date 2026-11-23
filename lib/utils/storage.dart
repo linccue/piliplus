@@ -10,6 +10,7 @@ import 'package:PiliPlus/utils/accounts/account_type_adapter.dart';
 import 'package:PiliPlus/utils/accounts/cookie_jar_adapter.dart';
 import 'package:PiliPlus/utils/path_utils.dart';
 import 'package:PiliPlus/utils/set_int_adapter.dart';
+import 'package:PiliPlus/utils/storage_key.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:PiliPlus/utils/utils.dart';
 import 'package:hive_ce/hive.dart';
@@ -74,6 +75,12 @@ abstract final class GStorage {
       );
     } else {
       reply = null;
+    }
+
+    // 字幕翻译改为按视频开关（默认关闭），把旧的全局开关一次性复位
+    if (localCache.get('sub_trans_per_video_migrated') != true) {
+      await setting.put(SettingBoxKey.subtitleTranslateEnabled, false);
+      await localCache.put('sub_trans_per_video_migrated', true);
     }
   }
 

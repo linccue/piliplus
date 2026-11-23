@@ -77,8 +77,8 @@ class _SubtitleTranslateSettingState extends State<SubtitleTranslateSetting> {
         padding: const EdgeInsets.only(bottom: 32),
         children: [
           const SetSwitchItem(
-            title: '启用字幕翻译',
-            subtitle: '播放外语字幕时自动翻译成简体中文，翻译过的字幕会保存到本地复用',
+            title: '默认开启（新视频）',
+            subtitle: '默认关闭：在播放页「字幕设置」里手动打开，只对当前视频生效并记住；打开这个开关后新视频也默认翻译',
             setKey: SettingBoxKey.subtitleTranslateEnabled,
             leading: Icon(Icons.translate),
           ),
@@ -122,6 +122,7 @@ class _SubtitleTranslateSettingState extends State<SubtitleTranslateSetting> {
               '在腾讯云控制台「TokenHub」创建 API Key，模型权限勾选 hunyuan-translation。'
               '字幕按 20 句一批串行翻译，成功一批缓存一批，失败的批次会自动拆半重试；'
               '整段译完会把字幕全文存进本地，同一个视频再次打开直接读缓存、不再联网重译。'
+              '开关按视频记：播放页「字幕设置」里打开只影响当前视频，重进仍保持，其他视频仍默认关闭。'
               '换模型、换地址或切换「双语/仅译文」会重新翻译。B 站本身已有中文（含 AI）字幕的视频不会走翻译。',
               style: hintStyle,
             ),

@@ -264,8 +264,8 @@ List<SettingsModel> get playSettings => [
     onTap: _showSubtitleDialog,
   ),
   const SwitchModel(
-    title: '自动翻译字幕',
-    subtitle: '外语字幕自动翻译成简体中文，需先配置接口',
+    title: '字幕翻译默认开启',
+    subtitle: '默认关闭，播放页「字幕设置」里可单独为某个视频开启',
     leading: Icon(Icons.translate),
     setKey: SettingBoxKey.subtitleTranslateEnabled,
     defaultVal: false,

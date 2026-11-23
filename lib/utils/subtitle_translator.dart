@@ -37,10 +37,33 @@ abstract final class SubtitleTranslator {
     ),
   );
 
-  /// 是否具备翻译条件（开关已开且至少有可用通道）
-  static bool get enabled =>
-      Pref.subtitleTranslateEnabled &&
-      (Pref.subtitleTranslateApiKey.isNotEmpty || _fallbackProvider != null);
+  /// 是否配好了可用通道（有密钥），不代表该不该翻——开关按视频记
+  static bool get configured =>
+      Pref.subtitleTranslateApiKey.isNotEmpty || _fallbackProvider != null;
+
+  /// 粗略判断内容是否需要翻译：带假名的必译，拉丁字母多于汉字就译，
+  /// 纯中文（含少量英文）不译。本地字幕文件没有 lan 字段，靠这个判断。
+  static bool needTranslate(List<String> lines) {
+    var han = 0;
+    var kana = 0;
+    var latin = 0;
+    for (final line in lines) {
+      for (final rune in line.runes) {
+        if (rune >= 0x3040 && rune <= 0x30ff) {
+          kana++;
+        } else if ((rune >= 0x4e00 && rune <= 0x9fff) ||
+            (rune >= 0x3400 && rune <= 0x4dbf)) {
+          han++;
+        } else if ((rune >= 0x41 && rune <= 0x5a) ||
+            (rune >= 0x61 && rune <= 0x7a)) {
+          latin++;
+        }
+      }
+    }
+    if (kana > 0) return true;
+    if (han == 0 && latin == 0) return true;
+    return latin > han;
+  }
 
   /// 翻译 B 站字幕 body（`[{from,to,content}]`），返回同样结构的列表
   static Future<List<Map<String, dynamic>>?> translate(List body) async {

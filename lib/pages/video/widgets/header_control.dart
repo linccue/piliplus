@@ -51,6 +51,7 @@ import 'package:PiliPlus/utils/storage_key.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:PiliPlus/utils/storage_utils.dart';
 import 'package:PiliPlus/utils/subtitle_utils.dart';
+import 'package:PiliPlus/utils/subtitle_translator.dart';
 import 'package:PiliPlus/utils/utils.dart';
 import 'package:PiliPlus/utils/video_utils.dart';
 import 'package:battery_plus/battery_plus.dart';
@@ -1321,7 +1322,7 @@ class HeaderControlState extends State<HeaderControl>
                               children: [
                                 Text('字幕翻译', style: titleStyle),
                                 Text(
-                                  '外语 → 简体中文',
+                                  '外语 → 简体中文（仅本视频）',
                                   style: TextStyle(fontSize: 12),
                                 ),
                               ],
@@ -1330,20 +1331,18 @@ class HeaderControlState extends State<HeaderControl>
                           Transform.scale(
                             scale: 0.8,
                             child: Switch(
-                              value: Pref.subtitleTranslateEnabled,
-                              onChanged: (val) {
-                                GStorage.setting.put(
-                                  SettingBoxKey.subtitleTranslateEnabled,
-                                  val,
-                                );
-                                setState(() {});
-                                if (val &&
-                                    Pref.subtitleTranslateApiKey.isEmpty) {
+                              value: videoDetailCtr.subtitleTranslateOn,
+                              onChanged: (val) async {
+                                if (val && !SubtitleTranslator.configured) {
                                   SmartDialog.showToast(
                                     '请先在「播放设置 → 字幕翻译设置」填写密钥',
                                   );
+                                  return;
                                 }
-                                videoDetailCtr.refreshSubtitleTranslation();
+                                await videoDetailCtr.setSubtitleTranslateEnabled(
+                                  val,
+                                );
+                                setState(() {});
                               },
                             ),
                           ),

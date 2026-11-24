@@ -2,7 +2,6 @@ import 'package:PiliPlus/common/assets.dart';
 import 'package:PiliPlus/common/constants.dart';
 import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/animated_height.dart';
-import 'package:PiliPlus/common/widgets/custom_icon.dart';
 import 'package:PiliPlus/common/widgets/dialog/dialog.dart';
 import 'package:PiliPlus/common/widgets/expandable.dart';
 import 'package:PiliPlus/common/widgets/gesture/tap_gesture_recognizer.dart';
@@ -527,11 +526,15 @@ class _UgcIntroPanelState extends State<UgcIntroPanel> {
               text: !isLoading ? NumUtils.numFormat(stat!.favorite) : null,
             ),
           ),
-          ActionItem(
-            icon: const Icon(CustomIcons.download),
-            onTap: () => videoDetailCtr.onDownload(context),
-            text: '缓存',
-            semanticsLabel: '缓存',
+          Obx(
+            () => ActionItem(
+              icon: const Icon(MdiIcons.incognitoOff),
+              selectIcon: const Icon(MdiIcons.incognito),
+              selectStatus: MineController.anonymity.value,
+              onTap: MineController.onChangeAnonymity,
+              text: '无痕',
+              semanticsLabel: '无痕模式',
+            ),
           ),
           Obx(
             () => ActionItem(
@@ -965,7 +968,13 @@ class _UgcIntroPanelState extends State<UgcIntroPanel> {
             color: colorScheme.outline,
           ),
         ),
-        _incognitoBtn,
+        if (MineController.anonymity.value)
+          Icon(
+            MdiIcons.incognito,
+            size: 15,
+            color: colorScheme.outline,
+            semanticLabel: '无痕',
+          ),
         if (introController.isShowOnlineTotal)
           Obx(
             () => Text(
@@ -976,26 +985,6 @@ class _UgcIntroPanelState extends State<UgcIntroPanel> {
       ],
     );
   }
-
-  Widget get _incognitoBtn => Obx(() {
-    final anonymity = MineController.anonymity.value;
-    return IconButton(
-      style: IconButton.styleFrom(
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        minimumSize: const Size(24, 20),
-        padding: EdgeInsets.zero,
-        iconSize: 18,
-      ),
-      tooltip: "${anonymity ? '退出' : '进入'}无痕模式",
-      onPressed: MineController.onChangeAnonymity,
-      icon: Icon(
-        anonymity ? MdiIcons.incognito : MdiIcons.incognitoOff,
-        size: 18,
-        color: anonymity ? colorScheme.primary : colorScheme.outline,
-        semanticLabel: anonymity ? '退出无痕模式' : '进入无痕模式',
-      ),
-    );
-  });
 
   Widget get _aiBtn => Positioned(
     right: 8,
